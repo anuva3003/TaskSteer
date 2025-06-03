@@ -1,0 +1,13 @@
+import requests
+
+api_key = "AIzaSyDopU_djoMRZHztqPPfWFAyuNH0IdlrRPI"  # replace with your Gemini API key
+url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+
+response = requests.get(url)
+
+if response.ok:
+    models = response.json()
+    for model in models.get("models", []):
+        print(f"- {model['name']}")
+else:
+    print(f"Error {response.status_code}: {response.text}")
