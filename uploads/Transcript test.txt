@@ -1,0 +1,3 @@
+﻿- Anu will send the final report by Friday.
+- Rohan is assigned to integrate the new API by Tuesday.
+- Deadline for code review is next Wednesday.

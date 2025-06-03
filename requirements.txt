@@ -1,0 +1,13 @@
+flask
+flask-cors
+google-cloud-storage
+google-cloud-firestore
+google-auth
+google-auth-oauthlib
+google-api-python-client
+python-dotenv
+werkzeug
+protobuf
+firebase-admin
+google-cloud-aiplatform
+
