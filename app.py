@@ -14,7 +14,7 @@ print("📁 Current working directory:", os.getcwd())
 print("📂 Files in this directory:", os.listdir())
 # === CONFIGURE GEMINI ===
 # IMPORTANT: Replace with your actual GOOGLE_API_KEY or load from an environment variable.
-GOOGLE_API_KEY = "AIzaSyB7c9c4v-TrsEq9jKUMfuv-gi_4c1rjmX0" # <--- REPLACE THIS
+GOOGLE_API_KEY = "" # <--- REPLACE THIS
 if GOOGLE_API_KEY == "YOUR_GOOGLE_API_KEY":
     print("⚠️ WARNING: Please replace 'YOUR_GOOGLE_API_KEY' with your actual Google API Key for Gemini.")
 
