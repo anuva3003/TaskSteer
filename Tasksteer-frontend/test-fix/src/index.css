@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Optional: custom overrides to make default form elements cleaner */
+input, button, label {
+  @apply font-sans text-sm;
+}
+
+.custom-input {
+  @apply border border-gray-300 rounded-md px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-purple-500 transition duration-200;
+}
+
+.custom-checkbox {
+  @apply h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded;
+}
