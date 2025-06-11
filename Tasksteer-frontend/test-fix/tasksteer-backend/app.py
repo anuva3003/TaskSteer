@@ -9,91 +9,48 @@ import google.generativeai as genai
 import firebase_admin
 from firebase_admin import credentials, firestore
 import traceback # For detailed error logging
-from pathlib import Path
-# from dotenv import load_dotenv # Removed: No longer loading from .env
-
-# Initial diagnostic prints
-print(" SCRIPT START ".center(50, "="))
-script_dir = Path(__file__).resolve().parent
-print(f"📁 Current working directory: {os.getcwd()}")
-print(f"📂 Files in script directory ({script_dir}): {os.listdir(script_dir) if script_dir.exists() else 'Script directory not found'}")
-
+from flask_cors import CORS
+print("📁 Current working directory:", os.getcwd())
+print("📂 Files in this directory:", os.listdir())
 # === CONFIGURE GEMINI ===
-print(" GEMINI CONFIGURATION ".center(50, "-"))
-model = None  # Initialize model to None by default
+# IMPORTANT: Replace with your actual GOOGLE_API_KEY or load from an environment variable.
+GOOGLE_API_KEY = "AIzaSyD7nh8qhsNoICsUNjDkR8aJkwRnwhnyB4o" # <--- REPLACE THIS
+if GOOGLE_API_KEY == "YOUR_GOOGLE_API_KEY":
+    print("⚠️ WARNING: Please replace 'YOUR_GOOGLE_API_KEY' with your actual Google API Key for Gemini.")
 
-# --- Hardcode API Key Here ---
-# Replace "YOUR_ACTUAL_GOOGLE_API_KEY_HERE" with your actual key
-GOOGLE_API_KEY = "AIzaSyD7nh8qhsNoICsUNjDkR8aJkwRnwhnyB4o" 
-# -----------------------------
-
-api_key_source = "Hardcoded in script"
-
+genai.configure(api_key=GOOGLE_API_KEY)
 try:
-    if GOOGLE_API_KEY and GOOGLE_API_KEY != "YOUR_ACTUAL_GOOGLE_API_KEY_HERE":
-        print(f"✅ GOOGLE_API_KEY found (Source: {api_key_source}). Configuring Gemini...")
-        genai.configure(api_key=GOOGLE_API_KEY)
-        try:
-            model = genai.GenerativeModel("models/gemini-2.5-flash-preview-05-20") # Or your preferred model
-            print("✅ Gemini Model initialized successfully.")
-        except Exception as e_gemini:
-            print(f"🔥❌ Gemini Model Initialization Error (even with API key): {e_gemini}")
-            model = None
-    elif GOOGLE_API_KEY == "YOUR_ACTUAL_GOOGLE_API_KEY_HERE":
-        print("❌ GOOGLE_API_KEY is set to the placeholder value.")
-        print("   Please replace 'YOUR_ACTUAL_GOOGLE_API_KEY_HERE' in the script with your actual Google API Key.")
-        model = None
-    else: # Should not happen if hardcoded correctly, but good for completeness
-        print("❌ GOOGLE_API_KEY not found or is empty.")
-        model = None
-
-except Exception as e_env: # Renamed for clarity, though it's not strictly env related now
-    print(f"🔥❌ Error during Gemini configuration: {e_env}")
-    traceback.print_exc()
+    model = genai.GenerativeModel("models/gemini-1.5-flash")
+    print("✅ Gemini Model initialized successfully.")
+except Exception as e:
+    print(f"🔥❌❌❌ Gemini Model Initialization Error: {e} ❌❌❌🔥")
     model = None
 
 # === INITIALIZE FIRESTORE ===
-print(" FIRESTORE INITIALIZATION ".center(50, "-"))
-db = None
+# IMPORTANT: Ensure 'serviceAccountKey.json' is in the same directory as your app.py
+# or provide the correct path. Also, ensure the service account has Firestore permissions.
+db = None # Initialize db as None
 try:
-    relative_cred_path = script_dir / "serviceAccountKey.json"
-    # Example of an alternative, more specific hardcoded path if needed for your setup
-    # hardcoded_cred_path = Path("C:/Users/anuvarshini.bharath_/Downloads/TaskSteer/TaskSteer/tasksteer-backend/serviceAccountKey.json")
-    
-    cred_path_to_use = None
+  cred = credentials.Certificate("TaskSteer/ServiceAccountKeyy.json")
 
-    if relative_cred_path.is_file():
-        cred_path_to_use = relative_cred_path
-        print(f"ℹ️ Using service account key from relative path: {relative_cred_path}")
-    # elif hardcoded_cred_path.is_file(): # Uncomment if you need to check a hardcoded path
-    #     cred_path_to_use = hardcoded_cred_path
-    #     print(f"ℹ️ Using service account key from hardcoded path: {hardcoded_cred_path}")
-    else:
-        error_message = f"serviceAccountKey.json not found at relative path ({relative_cred_path})."
-        # if 'hardcoded_cred_path' in locals(): # Add this if you uncomment the hardcoded path check
-        #    error_message += f" Also checked hardcoded path ({hardcoded_cred_path})."
-        raise FileNotFoundError(error_message)
 
-    cred = credentials.Certificate(str(cred_path_to_use))
-    if not firebase_admin._apps: # Initialize app only if it hasn't been initialized
-        firebase_admin.initialize_app(cred)
-    else:
-        print("ℹ️ Firebase Admin App already initialized.")
-        
-    db = firestore.client()
-    print(f"✅ Firebase Admin SDK initialized (or re-used) successfully from {cred_path_to_use} and Firestore client obtained.")
-except FileNotFoundError as fnf_error:
-    print(f"🔥❌❌❌ Firebase Admin SDK Initialization Error: {fnf_error} ❌❌❌🔥")
-    print("   Ensure the service account key file ('serviceAccountKey.json') is in the correct path (ideally in the same directory as this script).")
-except Exception as e_firebase:
-    print(f"🔥❌❌❌ Firebase Admin SDK Initialization Error: {e_firebase} ❌❌❌🔥")
+  
+  # Or "path/to/your/serviceAccountKey.json"
+  firebase_admin.initialize_app(cred)
+  db = firestore.client()
+  print("✅ Firebase Admin SDK initialized successfully and Firestore client obtained.")
+except FileNotFoundError:
+    print("🔥❌❌❌ Firebase Admin SDK Initialization Error: 'serviceAccountKey.json' not found. ❌❌❌🔥")
+    print("Ensure the service account key file is in the correct path.")
+except Exception as e:
+    print(f"🔥❌❌❌ Firebase Admin SDK Initialization Error: {e} ❌❌❌🔥")
     traceback.print_exc()
 
-
 # === INITIALIZE FLASK APP ===
-print(" FLASK APP INITIALIZATION ".center(50, "-"))
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": ["http://localhost:5500", "http://127.0.0.1:5500", "http://localhost:5173"]}}, supports_credentials=True) # Added common Vite dev port
+# Adjust origins as needed. For development, ensure your frontend's origin is listed.
+  # Allows all for broad testing
+CORS(app, resources={r"/*": {"origins": ["http://localhost:5500", "http://127.0.0.1:5500"]}}, supports_credentials=True)
 print("✅ Flask App initialized with CORS.")
 
 # === GEMINI TASK EXTRACTOR ===
@@ -101,61 +58,100 @@ def extract_tasks_with_gemini(transcript_text_value: str, meeting_date_value: st
     if not model:
         print("❌ Gemini model not initialized. Cannot extract tasks.")
         return []
-    prompt = f"""You are an AI assistant specialized in extracting **explicitly committed and actionable tasks** from IT meeting transcripts.
-The meeting date for the following transcript is: **{meeting_date_value}**.
+    prompt = f"""
+You are a deterministic data transformation engine. Your purpose is to act as a logical processor that transforms unstructured meeting transcripts into a perfectly structured JSON array of actionable tasks. Your analysis must be logical, precise, and adhere strictly to the protocol below.
 
-Transcript:
+---
+**Data Extraction & Transformation Protocol**
+
+**1. Task Identification & Filtering:**
+-   A task is a **new, concrete action** explicitly assigned or volunteered for.
+-   **Filter out all non-tasks:** This includes status updates, questions, suggestions ("we should..."), and weak intentions ("I'll try to...").
+
+**2. Logical Task Consolidation (CRITICAL RULE):**
+-   If a single assignee is given multiple, sequential steps for the **same deliverable**, you MUST merge them into one logical task.
+-   **Example of what to do:**
+    -   *Transcript:* "Sara, I need you to create the RCA document. Make sure you submit it to the client by EOD tomorrow."
+    -   *Correct Consolidated Task:* "Create and submit the RCA document to the client"
+    -   *Incorrect Split Tasks:* ["Create the RCA document", "Submit the RCA document to the client"]
+-   This rule is paramount for creating a clean, non-redundant task list.
+
+**3. Data Point Extraction:**
+-   **Assignee:** The specific person or team responsible. Use "Unassigned" only as a last resort.
+-   **Deadline:** Calculate the absolute `YYYY-MM-DD` date from the **Reference Meeting Date: {meeting_date_value}**. Use an empty string `""` if no deadline is specified.
+
+**4. Task Description Formatting:**
+-   The 'task' field must be a **concise, imperative command** starting with an action verb (e.g., "Complete", "Submit", "Verify").
+-   The description must reflect the **complete, consolidated action**.
+
+---
+**Final Output Specification**
+
+**Schema:** A raw JSON array of objects. Keys: `task`, `assignee`, `deadline`.
+**Example (Modeling Consolidation):**
+`[
+  {{
+    "task": "Create and submit the Root Cause Analysis (RCA) report",
+    "assignee": "Sara",
+    "deadline": "2025-06-11"
+  }},
+  {{
+    "task": "Revert the failed deployment on prod-db-01",
+    "assignee": "Dave",
+    "deadline": "2025-06-10"
+  }}
+]`
+
+---
+**Execution Mandate**
+
+1.  **Analyze & Consolidate:** Process the transcript according to the full protocol, paying special attention to the **Logical Task Consolidation** rule.
+2.  **Construct & Validate:** Build the JSON array. Before emitting, perform a final self-correction to ensure the output is ONLY a raw JSON string starting with `[` and ending with `]` and that all tasks are logically consolidated.
+3.  **Emit:** Provide the final, validated JSON.
+
+**Process the following transcript:**
 {transcript_text_value}
-
-Output format should be a valid JSON array of objects. Each object must represent a single task and strictly follow this structure:
-[
-  {{"task": "Description of the task", "assignee": "Person responsible (or 'Unassigned')", "deadline": "YYYY-MM-DD (or empty string if not specified)"}}
-]
-If no tasks are found, output an empty array [].
 """
     try:
         response = model.generate_content(prompt)
         data = response.text.strip()
-        print(f"🧪 Gemini raw response text (first 100 chars):\n{data[:100]}...")
+        print(f"🧪 Gemini raw response text:\n{data}")
 
+        # Try to find the JSON part, often enclosed in ```json ... ```
         match = re.search(r'```json\s*([\s\S]*?)\s*```|(\[[\s\S]*\])', data, re.MULTILINE)
         json_string = None
         if match:
-            json_string = match.group(1) or match.group(2)
+            json_string = match.group(1) or match.group(2) # group(1) for ```json```, group(2) for direct array
 
         if not json_string:
+            # Fallback: if the whole string might be the JSON array
             if data.startswith('[') and data.endswith(']'):
                 json_string = data
             else:
                 print("❌ No clear JSON array found in Gemini response.")
                 return []
         
-        print(f"🔬 Attempting to parse extracted JSON string (first 100 chars): {json_string[:100]}...")
+        print(f"🔬 Attempting to parse extracted JSON string: {json_string}")
         parsed_tasks = json.loads(json_string)
         if not isinstance(parsed_tasks, list):
             print(f"❌ Parsed JSON is not a list: {type(parsed_tasks)}")
             return []
         
+        # Validate structure of each task (optional but good)
         validated_tasks = []
         for t in parsed_tasks:
             if isinstance(t, dict) and "task" in t:
-                # Basic deadline validation (YYYY-MM-DD or empty)
-                deadline = t.get("deadline", "")
-                if deadline and not re.fullmatch(r'\d{4}-\d{2}-\d{2}', deadline):
-                    print(f"⚠️ Invalid deadline format '{deadline}' from Gemini for task '{t.get('task')}'. Setting to empty.")
-                    deadline = ""
                 validated_tasks.append({
                     "task": t.get("task"),
                     "assignee": t.get("assignee", "Unassigned"),
-                    "deadline": deadline
+                    "deadline": t.get("deadline", "")
                 })
             else:
                 print(f"⚠️ Skipping invalid task structure from Gemini: {t}")
-        print(f"✅ Extracted {len(validated_tasks)} tasks with Gemini.")
         return validated_tasks
 
     except json.JSONDecodeError as je:
-        print(f"❌ Gemini JSON Decode Error: {je}. Attempted to parse: {json_string if 'json_string' in locals() else data[:200]}")
+        print(f"❌ Gemini JSON Decode Error: {je}. Attempted to parse: {json_string if 'json_string' in locals() else data}")
         return []
     except Exception as e:
         print(f"❌ Gemini General Error in extract_tasks_with_gemini: {e}")
@@ -166,7 +162,7 @@ If no tasks are found, output an empty array [].
 @app.route("/upload", methods=["POST", "OPTIONS"])
 def upload_transcript():
     if request.method == "OPTIONS":
-        return '', 204
+        return '', 204 # Handle preflight
     if not db:
         return jsonify({"message": "❌ Database not initialized. Cannot process upload."}), 500
 
@@ -179,17 +175,12 @@ def upload_transcript():
 
     try:
         print(f"📄 Processing uploaded file: {file.filename}")
-        content = file.read().decode("utf-8") 
-        meeting_date_str = request.form.get("meeting_date", datetime.date.today().isoformat())
-        try:
-            datetime.datetime.strptime(meeting_date_str, "%Y-%m-%d")
-        except ValueError:
-            print(f"⚠️ Invalid meeting date format: {meeting_date_str}. Defaulting to today.")
-            meeting_date_str = datetime.date.today().isoformat()
+        content = file.read().decode("utf-8")
+        meeting_date = request.form.get("meeting_date", datetime.date.today().isoformat()) # Default to today
+        
+        tasks_from_gemini = extract_tasks_with_gemini(content, meeting_date)
 
-        tasks_from_gemini = extract_tasks_with_gemini(content, meeting_date_str)
-
-        if not tasks_from_gemini:
+        if not tasks_from_gemini: # Check if the list is empty or None
             return jsonify({"message": "No valid tasks were extracted by Gemini from the transcript."}), 200
 
         action = request.form.get('action')
@@ -197,19 +188,19 @@ def upload_transcript():
             return jsonify({"message": "❌ Missing 'action' in form data."}), 400
 
         timestamp = firestore.SERVER_TIMESTAMP
-        added_count = 0
 
         if action == 'personalTasks':
+            added_count = 0
             for t_gemini in tasks_from_gemini:
+                task_title = t_gemini.get("task", "Untitled Task from Transcript")
                 normalized_task = {
-                    "title": t_gemini.get("task", "Untitled Task from Transcript"),
-                    "description": t_gemini.get("description", ""),
-                    "assignee": t_gemini.get("assignee", "Unassigned"),
+                    "title": task_title,
+                    "description": t_gemini.get("description", ""), # Gemini output might not have this yet
+                    "assignee": t_gemini.get("assignee", ""),
                     "due_date": t_gemini.get("deadline", ""),
                     "completed": False,
                     "deleted": False,
                     "created_at": timestamp,
-                    "updated_at": timestamp,
                     "source": "transcript"
                 }
                 db.collection("personal_tasks").add(normalized_task)
@@ -218,57 +209,57 @@ def upload_transcript():
             return jsonify({"message": f"✅ Added {added_count} task(s) to personal tasks."}), 200
 
         elif action == 'newList':
-            list_name = request.form.get('new_list_name', '').strip()
-            if not list_name:
-                list_name = f"Transcript Tasks - {secure_filename(file.filename)} - {meeting_date_str}"
+            list_name = request.form.get('new_list_name')
+            if not list_name: # Ensure list_name is provided
+                list_name = f"Transcript Tasks - {secure_filename(file.filename)} - {datetime.date.today().isoformat()}"
             
             list_ref = db.collection("shared_lists").document()
-            list_ref.set({"name": list_name, "created_at": timestamp, "updated_at": timestamp, "deleted": False})
+            list_ref.set({"name": list_name, "created_at": timestamp, "deleted": False})
             
+            added_count = 0
             for t_gemini in tasks_from_gemini:
                 normalized_task = {
                     "title": t_gemini.get("task", "Untitled Task from Transcript"),
                     "description": t_gemini.get("description", ""),
-                    "assignee": t_gemini.get("assignee", "Unassigned"),
+                    "assignee": t_gemini.get("assignee", ""),
                     "due_date": t_gemini.get("deadline", ""),
                     "status": "todo",
                     "deleted": False,
                     "completed": False,
-                    "created_at": timestamp,
-                    "updated_at": timestamp
+                    "created_at": timestamp
                 }
                 list_ref.collection("tasks").add(normalized_task)
                 added_count +=1
             print(f"✅ Created new list '{list_name}' (ID: {list_ref.id}) with {added_count} task(s).")
-            return jsonify({"message": f"✅ Created new list '{list_name}' with {added_count} task(s).", "id": list_ref.id, "name": list_name}), 200 # Use 'id' consistently
+            return jsonify({"message": f"✅ Created new list '{list_name}' with {added_count} task(s).", "new_list_id": list_ref.id, "list_name": list_name}), 200
 
         elif action == 'existingList':
             list_id = request.form.get("list_id")
             if not list_id:
-                return jsonify({"message": "❌ Missing 'list_id' for adding tasks to existing list."}), 400
+                 return jsonify({"message": "❌ Missing 'list_id' for adding tasks to existing list."}), 400
             
             list_ref = db.collection("shared_lists").document(list_id)
             list_doc = list_ref.get()
             if not list_doc.exists:
                 return jsonify({"message": f"❌ List with ID '{list_id}' not found."}), 404
             
+            added_count = 0
             for t_gemini in tasks_from_gemini:
                 normalized_task = {
                     "title": t_gemini.get("task", "Untitled Task from Transcript"),
                     "description": t_gemini.get("description", ""),
-                    "assignee": t_gemini.get("assignee", "Unassigned"),
+                    "assignee": t_gemini.get("assignee", ""),
                     "due_date": t_gemini.get("deadline", ""),
                     "status": "todo",
                     "deleted": False,
                     "completed": False,
-                    "created_at": timestamp,
-                    "updated_at": timestamp
+                    "created_at": timestamp
                 }
                 list_ref.collection("tasks").add(normalized_task)
                 added_count += 1
-            list_ref.update({"updated_at": timestamp}) 
             print(f"✅ Added {added_count} task(s) to existing list ID: {list_id}.")
             return jsonify({"message": f"✅ Added {added_count} task(s) to existing list."}), 200
+
         else:
             print(f"⚠️ Invalid action type received in /upload: {action}")
             return jsonify({"message": f"❌ Invalid action type: {action}."}), 400
@@ -291,61 +282,45 @@ def create_task():
         if not data:
             return jsonify({"message": "❌ No JSON data received."}), 400
 
-        title = data.get("task", data.get("title", "Untitled Task")).strip()
-        due_date = data.get("deadline", data.get("due_date", "")) 
+        # Accommodate 'task' or 'title' from frontend, default to "Untitled Task"
+        title = data.get("task", data.get("title", "Untitled Task"))
+        # Accommodate 'deadline' or 'due_date' from frontend
+        due_date = data.get("deadline", data.get("due_date", ""))
 
         task_payload = {
-            "title": title if title else "Untitled Task",
+            "title": title,
             "description": data.get("description", ""),
-            "assignee": data.get("assignee", "Unassigned"),
+            "assignee": data.get("assignee", ""),
             "due_date": due_date,
-            "status": data.get("status", "todo"), 
+            "status": data.get("status", "todo"),
             "deleted": False,
-            "completed": data.get("completed", False),
-            "created_at": firestore.SERVER_TIMESTAMP,
-            "updated_at": firestore.SERVER_TIMESTAMP
+            "completed": data.get("completed", False), # Default to False if not provided
+            "created_at": firestore.SERVER_TIMESTAMP
         }
 
-        task_type = data.get("type")
+        task_type = data.get("type") # Ensure this is defined from the payload
 
         if task_type == "personal":
-            _commit_time, doc_ref = db.collection("personal_tasks").add(task_payload)
-            task_id = doc_ref.id
-            print(f"✅ Personal task created. ID: {task_id}")
-            # Fetch the created task to return with resolved timestamps
-            created_task_doc = doc_ref.get()
-            created_task_data = created_task_doc.to_dict()
-            created_task_data["id"] = task_id
-            if 'created_at' in created_task_data and hasattr(created_task_data['created_at'], 'isoformat'):
-                created_task_data['created_at'] = created_task_data['created_at'].isoformat()
-            if 'updated_at' in created_task_data and hasattr(created_task_data['updated_at'], 'isoformat'):
-                created_task_data['updated_at'] = created_task_data['updated_at'].isoformat()
-            return jsonify({"message": "✅ Personal task created successfully.", "task": created_task_data}), 201
-        
+            doc_ref = db.collection("personal_tasks").add(task_payload)
+            print(f"✅ Personal task created. ID: {doc_ref[1].id if isinstance(doc_ref, tuple) else 'N/A'}")
+            return jsonify({"message": "✅ Personal task created successfully.", "id": doc_ref[1].id if isinstance(doc_ref, tuple) else None}), 201
         elif task_type == "shared":
             list_id = data.get("list_id")
             if not list_id:
                 return jsonify({"message": "❌ Missing 'list_id' for shared task."}), 400
             
+            # Verify list exists
             list_doc_ref = db.collection("shared_lists").document(list_id)
             if not list_doc_ref.get().exists:
-                return jsonify({"message": f"❌ Shared list with ID '{list_id}' not found."}), 404
+                 return jsonify({"message": f"❌ Shared list with ID '{list_id}' not found."}), 404
 
-            _commit_time, doc_ref = list_doc_ref.collection("tasks").add(task_payload)
-            task_id = doc_ref.id
-            list_doc_ref.update({"updated_at": firestore.SERVER_TIMESTAMP}) 
-            print(f"✅ Shared task created in list {list_id}. ID: {task_id}")
-            created_task_doc = doc_ref.get()
-            created_task_data = created_task_doc.to_dict()
-            created_task_data["id"] = task_id
-            if 'created_at' in created_task_data and hasattr(created_task_data['created_at'], 'isoformat'):
-                created_task_data['created_at'] = created_task_data['created_at'].isoformat()
-            if 'updated_at' in created_task_data and hasattr(created_task_data['updated_at'], 'isoformat'):
-                created_task_data['updated_at'] = created_task_data['updated_at'].isoformat()
-            return jsonify({"message": "✅ Shared task created successfully.", "task": created_task_data, "list_id": list_id}), 201
+            doc_ref = list_doc_ref.collection("tasks").add(task_payload)
+            print(f"✅ Shared task created in list {list_id}. ID: {doc_ref[1].id if isinstance(doc_ref, tuple) else 'N/A'}")
+            return jsonify({"message": "✅ Shared task created successfully.", "id": doc_ref[1].id if isinstance(doc_ref, tuple) else None}), 201
         else:
+            # task_type variable will hold the incorrect type or None here
             print(f"⚠️ Invalid task type received in /create-task: {task_type}")
-            return jsonify({"message": f"❌ Invalid task type: '{task_type}'."}), 400
+            return jsonify({"message": f"❌ Invalid task type: {task_type}."}), 400
 
     except Exception as e:
         print(f"🔥❌ /create-task Error: {e}")
@@ -364,29 +339,19 @@ def get_tasks():
     try:
         personal_tasks_data = []
         personal_tasks_query = db.collection("personal_tasks").where(
-            "deleted", "==", False # Corrected syntax
-        ).order_by("created_at", direction=firestore.Query.DESCENDING)
-        
+            filter=firestore.FieldFilter("deleted", "==", False)
+        )
         for doc in personal_tasks_query.stream():
             task = doc.to_dict()
             if task:
                 task["id"] = doc.id
-                if 'created_at' in task and hasattr(task['created_at'], 'isoformat'):
-                    task['created_at'] = task['created_at'].isoformat()
-                if 'updated_at' in task and hasattr(task['updated_at'], 'isoformat'):
-                    task['updated_at'] = task['updated_at'].isoformat()
-                if 'due_date' in task and isinstance(task['due_date'], datetime.datetime): # Firestore might store date strings as datetime
-                     task['due_date'] = task['due_date'].strftime('%Y-%m-%d')
-                elif 'due_date' in task and isinstance(task['due_date'], firestore.SERVER_TIMESTAMP.__class__): # Handle server timestamp sentinel
-                    task['due_date'] = "" # Or some placeholder, as it's not resolved yet
                 personal_tasks_data.append(task)
         print(f"✅ Retrieved {len(personal_tasks_data)} personal tasks.")
 
         shared_lists_data = []
         shared_lists_query = db.collection("shared_lists").where(
-            "deleted", "==", False # Corrected syntax
-        ).order_by("created_at", direction=firestore.Query.DESCENDING)
-        
+            filter=firestore.FieldFilter("deleted", "==", False) # Assuming lists can be soft-deleted
+        )
         for list_doc in shared_lists_query.stream():
             list_data = list_doc.to_dict()
             if not list_data:
@@ -395,38 +360,22 @@ def get_tasks():
 
             list_id = list_doc.id
             list_name = list_data.get("name", "Unnamed List")
-            
-            if 'created_at' in list_data and hasattr(list_data['created_at'], 'isoformat'):
-                list_data['created_at'] = list_data['created_at'].isoformat()
-            if 'updated_at' in list_data and hasattr(list_data['updated_at'], 'isoformat'):
-                list_data['updated_at'] = list_data['updated_at'].isoformat()
             print(f"📄 Processing Shared list: {list_name} (ID: {list_id})")
 
             current_list_tasks = []
             tasks_query = db.collection("shared_lists").document(list_id).collection("tasks").where(
-                "deleted", "==", False # Corrected syntax
-            ).order_by("created_at", direction=firestore.Query.DESCENDING)
-            
+                filter=firestore.FieldFilter("deleted", "==", False)
+            )
             for task_doc in tasks_query.stream():
                 task_data = task_doc.to_dict()
                 if task_data:
                     task_data["id"] = task_doc.id
-                    if 'created_at' in task_data and hasattr(task_data['created_at'], 'isoformat'):
-                        task_data['created_at'] = task_data['created_at'].isoformat()
-                    if 'updated_at' in task_data and hasattr(task_data['updated_at'], 'isoformat'):
-                        task_data['updated_at'] = task_data['updated_at'].isoformat()
-                    if 'due_date' in task_data and isinstance(task_data['due_date'], datetime.datetime):
-                        task_data['due_date'] = task_data['due_date'].strftime('%Y-%m-%d')
-                    elif 'due_date' in task_data and isinstance(task_data['due_date'], firestore.SERVER_TIMESTAMP.__class__):
-                        task_data['due_date'] = ""
                     current_list_tasks.append(task_data)
             
             shared_lists_data.append({
                 "id": list_id,
                 "name": list_name,
-                "created_at": list_data.get('created_at'),
-                "updated_at": list_data.get('updated_at'),
-                "tasks": current_list_tasks 
+                "tasks": current_list_tasks # This should be an array of task objects
             })
             print(f"  ➡️ Found {len(current_list_tasks)} tasks for list '{list_name}'.")
         print(f"✅ Retrieved {len(shared_lists_data)} shared lists.")
@@ -441,7 +390,7 @@ def get_tasks():
         print("🔥❌❌❌ /tasks Unhandled Exception ❌❌❌🔥")
         print(f"Error Type: {type(e).__name__}")
         print(f"Error Message: {str(e)}")
-        traceback.print_exc() 
+        traceback.print_exc()
         return jsonify({"error": "An internal server error occurred while fetching tasks.", "details": str(e)}), 500
 
 # === /CREATE-LIST ENDPOINT ===
@@ -453,31 +402,32 @@ def create_list():
         return jsonify({"message": "❌ Database not initialized. Cannot create list."}), 500
     try:
         data = request.get_json()
-        if not data or not data.get("name", "").strip():
-            return jsonify({"message": "❌ List name is required and cannot be empty."}), 400
+        if not data or not data.get("name"):
+            return jsonify({"message": "❌ List name is required in JSON payload."}), 400
         
-        list_name = data["name"].strip()
+        list_name = data["name"]
         new_list_payload = {
             "name": list_name,
             "created_at": firestore.SERVER_TIMESTAMP,
-            "updated_at": firestore.SERVER_TIMESTAMP,
-            "deleted": False
+            "deleted": False # Initialize as not deleted
         }
-        _commit_time, list_ref = db.collection("shared_lists").add(new_list_payload)
+        # Add the new list to Firestore
+        update_time, list_ref = db.collection("shared_lists").add(new_list_payload)
+        # list_ref is a DocumentReference
         
-        created_list_doc = list_ref.get() # Fetch to get resolved timestamps
-        created_list_data = created_list_doc.to_dict()
+        created_list_data = new_list_payload.copy()
         created_list_data["id"] = list_ref.id
-        if 'created_at' in created_list_data and hasattr(created_list_data['created_at'], 'isoformat'):
-            created_list_data['created_at'] = created_list_data['created_at'].isoformat()
-        if 'updated_at' in created_list_data and hasattr(created_list_data['updated_at'], 'isoformat'):
-            created_list_data['updated_at'] = created_list_data['updated_at'].isoformat()
+        # For created_at, firestore.SERVER_TIMESTAMP is a sentinel.
+        # If you need the actual timestamp in the response, you'd typically re-fetch the doc or use update_time.
+        # For simplicity, we'll send what we have. Frontend might re-fetch tasks anyway.
+        created_list_data["created_at"] = update_time.isoformat() if update_time else None
+
 
         print(f"✅ Shared list '{list_name}' created with ID: {list_ref.id}")
         return jsonify({
             "message": f"✅ Shared list '{list_name}' created successfully.",
-            "list": created_list_data,
-            "id": list_ref.id 
+            "list": created_list_data,  # Sending back the created list object
+            "new_list_id": list_ref.id # For compatibility with some frontend logic
         }), 201
 
     except Exception as e:
@@ -485,8 +435,8 @@ def create_list():
         traceback.print_exc()
         return jsonify({"error": "Failed to create list.", "details": str(e)}), 500
 
-# === UPDATE/DELETE ENDPOINTS ===
-
+# === Add other CRUD endpoints here as needed (update, delete for personal tasks, shared tasks, and lists) ===
+# Example: Update Personal Task
 @app.route("/update-personal-task/<task_id>", methods=["PUT", "OPTIONS"])
 def update_personal_task(task_id):
     if request.method == "OPTIONS": return '', 204
@@ -498,33 +448,25 @@ def update_personal_task(task_id):
         task_ref = db.collection("personal_tasks").document(task_id)
         if not task_ref.get().exists: return jsonify({"message": "Personal task not found"}), 404
         
+        # Prepare updates, only include fields that are present in the payload
         updates = {}
-        if "title" in data: updates["title"] = data["title"].strip() if data["title"] else "Untitled Task"
-        if "task" in data: updates["title"] = data["task"].strip() if data["task"] else "Untitled Task"
+        if "title" in data: updates["title"] = data["title"]
+        if "task" in data: updates["title"] = data["task"] # Accommodate 'task' as title
         if "description" in data: updates["description"] = data["description"]
-        if "due_date" in data: updates["due_date"] = data["due_date"] 
-        if "deadline" in data: updates["due_date"] = data["deadline"] 
+        if "due_date" in data: updates["due_date"] = data["due_date"]
+        if "deadline" in data: updates["due_date"] = data["deadline"] # Accommodate 'deadline'
         if "completed" in data: updates["completed"] = bool(data["completed"])
         
         if not updates: return jsonify({"message": "No update fields provided"}), 400
             
         updates["updated_at"] = firestore.SERVER_TIMESTAMP
         task_ref.update(updates)
-        print(f"✅ Personal task {task_id} updated.")
-        
-        updated_task_doc = task_ref.get()
-        updated_task_data = updated_task_doc.to_dict()
-        updated_task_data["id"] = updated_task_doc.id
-        if 'created_at' in updated_task_data and hasattr(updated_task_data['created_at'], 'isoformat'):
-             updated_task_data['created_at'] = updated_task_data['created_at'].isoformat()
-        if 'updated_at' in updated_task_data and hasattr(updated_task_data['updated_at'], 'isoformat'):
-             updated_task_data['updated_at'] = updated_task_data['updated_at'].isoformat()
-
-        return jsonify({"message": f"✅ Personal task {task_id} updated.", "task": updated_task_data}), 200
+        return jsonify({"message": f"✅ Personal task {task_id} updated."}), 200
     except Exception as e:
         print(f"🔥❌ /update-personal-task Error: {e}"); traceback.print_exc()
         return jsonify({"error": "Failed to update personal task.", "details": str(e)}), 500
 
+# Example: Delete Personal Task
 @app.route("/delete-personal-task/<task_id>", methods=["DELETE", "OPTIONS"])
 def delete_personal_task(task_id):
     if request.method == "OPTIONS": return '', 204
@@ -533,13 +475,16 @@ def delete_personal_task(task_id):
         task_ref = db.collection("personal_tasks").document(task_id)
         if not task_ref.get().exists: return jsonify({"message": "Personal task not found"}), 404
         
-        task_ref.update({"deleted": True, "deleted_at": firestore.SERVER_TIMESTAMP, "updated_at": firestore.SERVER_TIMESTAMP})
-        print(f"✅ Personal task {task_id} marked as deleted.")
-        return jsonify({"message": f"✅ Personal task {task_id} marked as deleted.", "id": task_id}), 200
+        # Soft delete:
+        task_ref.update({"deleted": True, "deleted_at": firestore.SERVER_TIMESTAMP})
+        # Or hard delete:
+        # task_ref.delete()
+        return jsonify({"message": f"✅ Personal task {task_id} marked as deleted."}), 200
     except Exception as e:
         print(f"🔥❌ /delete-personal-task Error: {e}"); traceback.print_exc()
         return jsonify({"error": "Failed to delete personal task.", "details": str(e)}), 500
 
+# Example: Update Shared Task
 @app.route("/update-shared-task/<list_id>/<task_id>", methods=["PUT", "OPTIONS"])
 def update_shared_task(list_id, task_id):
     if request.method == "OPTIONS": return '', 204
@@ -548,65 +493,49 @@ def update_shared_task(list_id, task_id):
         data = request.get_json()
         if not data: return jsonify({"message": "Missing data"}), 400
 
-        list_ref = db.collection("shared_lists").document(list_id)
-        if not list_ref.get().exists: return jsonify({"message": f"List {list_id} not found"}), 404
-
-        task_ref = list_ref.collection("tasks").document(task_id)
+        task_ref = db.collection("shared_lists").document(list_id).collection("tasks").document(task_id)
         if not task_ref.get().exists: return jsonify({"message": "Shared task not found"}), 404
 
         updates = {}
-        if "title" in data: updates["title"] = data["title"].strip() if data["title"] else "Untitled Task"
-        if "task" in data: updates["title"] = data["task"].strip() if data["task"] else "Untitled Task"
+        if "title" in data: updates["title"] = data["title"]
+        if "task" in data: updates["title"] = data["task"]
         if "description" in data: updates["description"] = data["description"]
-        if "due_date" in data: updates["due_date"] = data["due_date"] 
-        if "deadline" in data: updates["due_date"] = data["deadline"] 
+        if "due_date" in data: updates["due_date"] = data["due_date"]
+        if "deadline" in data: updates["due_date"] = data["deadline"]
         if "assignee" in data: updates["assignee"] = data["assignee"]
-        if "status" in data: updates["status"] = data["status"] 
-        
-        if "completed" in data:
+        if "status" in data: updates["status"] = data["status"]
+        if "completed" in data: # If 'completed' is sent, adjust status accordingly
             updates["completed"] = bool(data["completed"])
-            if "status" not in data: 
-                updates["status"] = "completed" if updates["completed"] else "todo"
-        
+            if updates["completed"] and data.get("status") != "completed":
+                 updates["status"] = "completed"
+            elif not updates["completed"] and data.get("status") == "completed":
+                 updates["status"] = "todo" # Or previous status if tracked
+
         if not updates: return jsonify({"message": "No update fields provided"}), 400
 
         updates["updated_at"] = firestore.SERVER_TIMESTAMP
         task_ref.update(updates)
-        list_ref.update({"updated_at": firestore.SERVER_TIMESTAMP}) 
-
-        print(f"✅ Shared task {task_id} in list {list_id} updated.")
-        updated_task_doc = task_ref.get()
-        updated_task_data = updated_task_doc.to_dict()
-        updated_task_data["id"] = updated_task_doc.id
-        if 'created_at' in updated_task_data and hasattr(updated_task_data['created_at'], 'isoformat'):
-             updated_task_data['created_at'] = updated_task_data['created_at'].isoformat()
-        if 'updated_at' in updated_task_data and hasattr(updated_task_data['updated_at'], 'isoformat'):
-             updated_task_data['updated_at'] = updated_task_data['updated_at'].isoformat()
-
-        return jsonify({"message": f"✅ Shared task {task_id} in list {list_id} updated.", "task": updated_task_data, "list_id": list_id}), 200
+        return jsonify({"message": f"✅ Shared task {task_id} in list {list_id} updated."}), 200
     except Exception as e:
         print(f"🔥❌ /update-shared-task Error: {e}"); traceback.print_exc()
         return jsonify({"error": "Failed to update shared task.", "details": str(e)}), 500
 
+# Example: Delete Shared Task
 @app.route("/delete-shared-task/<list_id>/<task_id>", methods=["DELETE", "OPTIONS"])
 def delete_shared_task(list_id, task_id):
     if request.method == "OPTIONS": return '', 204
     if not db: return jsonify({"message": "❌ DB not initialized."}), 500
     try:
-        list_ref = db.collection("shared_lists").document(list_id)
-        if not list_ref.get().exists: return jsonify({"message": f"List {list_id} not found"}), 404
-
-        task_ref = list_ref.collection("tasks").document(task_id)
+        task_ref = db.collection("shared_lists").document(list_id).collection("tasks").document(task_id)
         if not task_ref.get().exists: return jsonify({"message": "Shared task not found"}), 404
         
-        task_ref.update({"deleted": True, "deleted_at": firestore.SERVER_TIMESTAMP, "updated_at": firestore.SERVER_TIMESTAMP})
-        list_ref.update({"updated_at": firestore.SERVER_TIMESTAMP}) 
-        print(f"✅ Shared task {task_id} in list {list_id} marked as deleted.")
-        return jsonify({"message": f"✅ Shared task {task_id} in list {list_id} marked as deleted.", "id": task_id, "list_id": list_id}), 200
+        task_ref.update({"deleted": True, "deleted_at": firestore.SERVER_TIMESTAMP})
+        return jsonify({"message": f"✅ Shared task {task_id} in list {list_id} marked as deleted."}), 200
     except Exception as e:
         print(f"🔥❌ /delete-shared-task Error: {e}"); traceback.print_exc()
         return jsonify({"error": "Failed to delete shared task.", "details": str(e)}), 500
 
+# Example: Delete Shared List (Soft Delete)
 @app.route("/delete-list/<list_id>", methods=["DELETE", "OPTIONS"])
 def delete_list(list_id):
     if request.method == "OPTIONS": return '', 204
@@ -615,20 +544,21 @@ def delete_list(list_id):
         list_ref = db.collection("shared_lists").document(list_id)
         if not list_ref.get().exists: return jsonify({"message": "Shared list not found"}), 404
             
-        list_ref.update({"deleted": True, "deleted_at": firestore.SERVER_TIMESTAMP, "updated_at": firestore.SERVER_TIMESTAMP})
-        print(f"✅ Shared list {list_id} marked as deleted.")
-        return jsonify({"message": f"✅ Shared list {list_id} marked as deleted.", "id": list_id}), 200
+        list_ref.update({"deleted": True, "deleted_at": firestore.SERVER_TIMESTAMP})
+        # Optionally, you might want to mark all tasks in this list as deleted too,
+        # or handle this via application logic/security rules.
+        return jsonify({"message": f"✅ Shared list {list_id} marked as deleted."}), 200
     except Exception as e:
         print(f"🔥❌ /delete-list Error: {e}"); traceback.print_exc()
         return jsonify({"error": "Failed to delete shared list.", "details": str(e)}), 500
 
-# === ROOT ENDPOINT ===
 @app.route("/")
 def index():
-    return jsonify({"message": "🚀 TaskSteer backend is running. All systems go!"}), 200
+    return jsonify({"message": "🚀 TaskSteer backend is running."}), 200
 
 # === RUN SERVER ===
 if __name__ == "__main__":
-    print(" SERVER STARTUP ".center(50, "="))
     print("🚀 Starting Flask server...")
+    # Using 0.0.0.0 makes the server accessible on your local network,
+    # which is often needed for ngrok to connect properly.
     app.run(host="0.0.0.0", port=8080, debug=True)
