@@ -27,13 +27,13 @@ import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 
 // Firebase configuration
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-    apiKey: "AIzaSyBPneX8HLvkg1z6fGpTKUDDFOFUJkdf-iA",
-    authDomain: "tasksteer.firebaseapp.com",
-    projectId: "tasksteer",
-    storageBucket: "tasksteer.appspot.com",
-    messagingSenderId: "553442098430",
-    appId: "1:553442098430:web:9a79768fe81bdd15a379af",
-    measurementId: "G-WQ2MC2GJNS"
+    apiKey: "",
+    authDomain: "firebaseapp.com",
+    projectId: "",
+    storageBucket: "",
+    messagingSenderId: "",
+    appId: "",
+    measurementId: ""
 };
 
 // App ID for Firestore paths
